@@ -1,3 +1,4 @@
 rdkit-pypi
 Pillow
+libxrender1
 
