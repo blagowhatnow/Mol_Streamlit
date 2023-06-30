@@ -6,6 +6,7 @@ from rdkit import Chem
 from rdkit.Chem import AllChem
 from rdkit.Chem import Descriptors
 from rdkit.Chem import rdFreeSASA
+from rdkit.Chem import Draw
 import SessionState
 
 def calculate_sasa(mol):
