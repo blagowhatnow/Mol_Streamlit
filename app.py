@@ -6,21 +6,7 @@ from rdkit import Chem
 from rdkit.Chem import AllChem
 from rdkit.Chem import Descriptors
 from rdkit.Chem import rdFreeSASA
-from rdkit.Chem import PandasTools, Draw
-import base64
-from io import BytesIO
-from PIL import Image
 import SessionState
-
-
-
-def image_base64(im):
-    with BytesIO() as buffer:
-        im.save(buffer, 'jpeg')
-        return base64.b64encode(buffer.getvalue()).decode()
-
-def image_formatter(im):
-    return f'<img src="data:image/jpeg;base64,{image_base64(im)}">'
 
 def calculate_sasa(mol):
     try:
@@ -82,15 +68,7 @@ def ret_final_df(df):
     # Create RDKit molecules from the SMILES
     molecules = [Chem.MolFromSmiles(i) for i in smiles]
 
-    # Write molecules to an SDF file
-    writer = Chem.SDWriter('molecules.sdf')
-    for mol in molecules:
-        writer.write(mol)
-    writer.close()
-
-    # Read the SDF file and extract the structures as images
-    suppl = Chem.SDMolSupplier('molecules.sdf')
-    struc_images = [Draw.MolToImage(mol) for mol in suppl]
+    struc_images = [Draw.MolToImage(mol) for mol in molecules]
 
     # Create a DataFrame with structure images
     struc_df = pd.DataFrame({'Structures': struc_images})
