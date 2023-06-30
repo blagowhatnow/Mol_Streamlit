@@ -80,7 +80,7 @@ def ret_final_df(df):
     return merged_df_final
 
 def main():
-    st.title("Molecular Properties App - Knowdis")
+    st.title("Molecular Properties App")
 
     # File uploader
     uploaded_file = st.file_uploader("Upload a CSV file", type="csv")
