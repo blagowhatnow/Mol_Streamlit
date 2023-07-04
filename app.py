@@ -168,7 +168,7 @@ def ret_final_df(df):
     return merged_df_final
 
 def main():
-    st.title("Molecular Properties App - Knowdis")
+    st.title("Molecular Properties App")
 
     # Input field for molecule
     molecule_input = st.text_input("Enter a SMILES string:")
