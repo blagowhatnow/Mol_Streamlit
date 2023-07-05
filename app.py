@@ -1,4 +1,4 @@
-#Made wth streamlit 1.3.1
+#Made wth streamlit 1.3.1. Uses the files etoxpred_best_model.joblib, sascore.py, fpscores.pkl.gz from eToxPred. Can be retrained on new data.
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -9,6 +9,50 @@ from rdkit.Chem import rdFreeSASA
 from rdkit.Chem import Draw
 import matplotlib.pyplot as plt
 import SessionState
+
+import argparse
+
+import pandas as pd
+
+from rdkit import Chem
+from rdkit import rdBase
+from rdkit.Chem import AllChem
+
+import numpy as np
+
+from sascore import SAscore
+from joblib import load
+
+rdBase.DisableLog('rdApp.error')
+
+def load_data(smiles_list):
+    mols = [Chem.MolFromSmiles(x) for x in smiles_list]
+    X = []
+    cnt = 0
+    for mol in mols:
+        mol = Chem.AddHs(mol)
+        fp = AllChem.GetMorganFingerprintAsBitVect(mol, radius=2, nBits=1024)
+        fp_string = fp.ToBitString()
+        tmpX = np.array(list(fp_string),dtype=float)
+        X.append(tmpX)
+        cnt += 1
+    X = np.array(X)
+    return X, smiles_list
+
+def predict(smiles_list, model_file):
+    df = pd.DataFrame(columns=['smiles', 'Tox-score', 'SAscore'])
+    # laod the data
+    X, smiles_list = load_data(smiles_list)
+    # load the saved model and make predictions
+    clf = load(model_file)
+    reg = SAscore()
+    for i in range(X.shape[0]):
+        tox_score = clf.predict_proba(X[i,:].reshape((1,1024)))[:,1]
+        sa_score = reg(smiles_list[i])
+        df.at[i, 'smiles'] = smiles_list[i]
+        df.at[i, 'Tox-score'] = tox_score[0]
+        df.at[i, 'SAscore'] = sa_score
+    return df
 
 st.set_page_config(page_title="Drug Property")
 
@@ -108,14 +152,15 @@ def generate_copy(smiles, verbose=False):
 
     return descriptors
 
-def generate_single(smiles):
+def generate_single(smiles, model_file):
     try:
         mol = Chem.MolFromSmiles(smiles)
+        smiles_list=[smiles]
+        df_toxi=predict(smiles_list,model_file)
 
         if mol is None:
             return None, {}
 
-        # Generate 3D coordinates
         AllChem.EmbedMolecule(mol)
 
         desc_MolLogP = round(Descriptors.MolLogP(mol), 3)
@@ -139,42 +184,43 @@ def generate_single(smiles):
             "HeavyAtoms": desc_HeavyAtoms,
             "NumAromaticRings": desc_NumAromaticRings,
             "SASA": desc_SASA,
-            "QED": desc_QED
+            "QED": desc_QED,
+            "Toxicity" : df_toxi['Tox-score'][0],
+            "SA Score" : df_toxi['SAscore'][0]
         }
 
         return mol, properties
     except:
         return None, {}
 
-def ret_final_df(df):
+def ret_final_df(df, model_file):
     df_orig = df.copy()  # Make a copy of the original DataFrame
     smiles = df_orig['Ligand SMILES']
     df = generate(smiles)
+    df_tox=predict(smiles, model_file)
+    df_sub_0=df_tox[['Tox-score', 'SAscore']]
     df_sub = df_orig[['FDA drugnames', 'Ligand SMILES']]
     merged_df = pd.concat([df_sub, df], axis=1)
-
     # Create RDKit molecules from the SMILES
     molecules = [Chem.MolFromSmiles(i) for i in smiles]
-
     # Read the SDF file and extract the structures as images
     struc_images = [Draw.MolToImage(mol) for mol in molecules]
-
     # Create a DataFrame with structure images
     struc_df = pd.DataFrame({'Structures': struc_images})
-
     # Merge the structure images DataFrame with the properties DataFrame
     merged_df_final = pd.concat([merged_df, struc_df], axis=1)
-
-    return merged_df_final
+    merged_df_fin=pd.concat([df_sub_0, merged_df_final], axis=1)
+    return merged_df_fin
 
 def main():
-    st.title("Molecular Properties App")
+    model_file='etoxpred_best_model.joblib'
+    st.title("Molecular Properties App - Knowdis")
 
     # Input field for molecule
     molecule_input = st.text_input("Enter a SMILES string:")
 
     if molecule_input:
-        mol, properties = generate_single(molecule_input)
+        mol, properties = generate_single(molecule_input, model_file)
 
         if mol is None:
             st.write("Invalid molecule.")
@@ -192,6 +238,8 @@ def main():
             st.write("NumAromaticRings:", properties["NumAromaticRings"])
             st.write("SASA:", properties["SASA"])
             st.write("QED:", properties["QED"])
+            st.write("Toxicity:", properties["Toxicity"])
+            st.write("SA Score:", properties["SA Score"])
 
             # Display 2D structure
             st.subheader("2D Structure")
@@ -256,8 +304,9 @@ def main():
           st.subheader("Original DataFrame Head")
           st.dataframe(sliced_df)
 
+
         # Process the DataFrame
-          final_df = ret_final_df(sliced_df)
+          final_df = ret_final_df(sliced_df, model_file)
 
         # Display the structures with properties for the current page
           for i in range(0, len(final_df), molecules_per_row):
@@ -278,6 +327,8 @@ def main():
                       st.write("NumAromaticRings:", row['NumAromaticRings'])
                       st.write("SASA:", row['SASA'])
                       st.write("QED:", row['QED'])
+                      st.write("Toxicity:", row['Tox-score'])
+                      st.write("SA Score:", row['SAscore'])
                       st.write("---") 
       except:
         st.write("Dataframe uploaded is not in the proper format")     
@@ -337,7 +388,7 @@ def main():
         st.dataframe(sliced_df)
 
         # Process the DataFrame
-        final_df = ret_final_df(sliced_df)
+        final_df = ret_final_df(sliced_df, model_file)
 
         # Display the structures with properties for the current page
         # Display the structures with properties for the current page
@@ -359,7 +410,11 @@ def main():
                     st.write("NumAromaticRings:", row['NumAromaticRings'])
                     st.write("SASA:", row['SASA'])
                     st.write("QED:", row['QED'])
+                    st.write("Toxicity:", row['Tox-score'])
+                    st.write("SA Score:", row['SAscore'])
                     st.write("---")
         
+
+
 if __name__ == "__main__":
     main()
