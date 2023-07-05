@@ -214,7 +214,7 @@ def ret_final_df(df, model_file):
 
 def main():
     model_file='etoxpred_best_model.joblib'
-    st.title("Molecular Properties App - Knowdis")
+    st.title("Molecular Properties App")
 
     # Input field for molecule
     molecule_input = st.text_input("Enter a SMILES string:")
